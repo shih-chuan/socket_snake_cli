@@ -1,28 +1,14 @@
 const blessed = require('blessed');
-const { GRID_SIZE, PORT, HOST } = require('./constants');
-var net = require('net');
-
-/**
- * @class UserInterface
- *
- * Interact with the input (keyboard directions) and output (creating screen and
- * drawing pixels to the screen). Currently this class is one hard-coded
- * interface, but could be made into an abstract and extended for multiple
- * interfaces - web, terminal, etc.
- */
+const { GRID_SIZE, SNAKE_COLOR, DOT_COLOR } = require('./constants');
 class UserInterface {
     constructor() {
-        // Blessed is the terminal library API that provides a screen, elements, and
-        // event handling
         this.blessed = blessed
         this.screen = blessed.screen({
             fastCSR: true
         })
 
-        // Game title
-        this.screen.title = 'Snek.js'
+        this.screen.title = '107403551 邱士權'
 
-        // Create the boxes
         this.gameBox = this.createGameBox()
         this.scoreBox = this.createScoreBox()
         this.gameOverBox = this.createGameOverBox()
@@ -31,47 +17,18 @@ class UserInterface {
         this.scoreContainer = this.blessed.box(this.scoreBox)
     }
 
-    openConnection() {
-        if(this.client) {
-            console.log("--Connection already opened--");
+    drawSnake(players) {
+        Object.keys(players).map((playerId) => {
+            let snake = players[playerId].snake;
+            snake.forEach(segment => {
+                this.draw(segment, SNAKE_COLOR[players[playerId].id])
+            })
             return;
-        }
-        //create Socket
-        this.client = new net.Socket();
-        this.client.on('error', function(err) {
-            this.client.destroy();
-            this.client = null;
-            console.log("ERROR: Connection could not be opened. msg: %s", err.message);
-            this.clearScreen();
-        })
-
-        //receiving event
-        this.client.on('data', function(data) {
-            console.log("RECEIVED: %s", data);
-        })
-
-        this.client.connect(PORT, HOST, function() {
-            console.log("Connection opened successfully");
         })
     }
 
-    sendData(data) {
-        if(!this.client){
-            console.log("--Connection is not opened or closed --");
-            return;
-        }
-        this.client.write(data);
-    }
-
-    closeConnection() {
-        if(!this.client){
-            console.log("--Connection is not opened or already closed --");
-            return;
-        }
-        this.client.destroy();
-        this.client = null;
-        console.log("--Connection closed successfully--");
-        this.clearScreen();
+    drawDot(dot) {
+        this.draw(dot, DOT_COLOR)
     }
 
     createGameBox() {
@@ -112,7 +69,7 @@ class UserInterface {
             height: 6,
             tags: true,
             valign: 'middle',
-            content: `{center}Game Over!\n\nPress enter to try again{/center}`,
+            content: `{center}Game Over!\n\nPress q to exit{/center}`,
             border: {
                 type: 'line',
             },
@@ -126,14 +83,6 @@ class UserInterface {
         }
     }
 
-    bindHandlers(keyPressHandler, quitHandler, enterHandler) {
-        // Event to handle keypress i/o
-        this.screen.on('keypress', keyPressHandler)
-        this.screen.key(['escape', 'q', 'C-c'], quitHandler)
-        this.screen.key(['enter'], enterHandler)
-    }
-
-    // Draw a pixel
     draw(coord, color) {
         this.blessed.box({
             parent: this.gameContainer,
@@ -148,23 +97,24 @@ class UserInterface {
         })
     }
 
-    // Keep track of how many dots have been consumed and write to the score box
     updateScore(score) {
         this.scoreContainer.setLine(0, `{bold}Score:{/bold} ${score}`)
     }
 
-    // BSOD on game over
     gameOverScreen() {
         this.gameContainer = this.blessed.box(this.gameOverBox)
     }
 
-    // Set to initial screen
+    showGameOverScreen() {
+        this.gameOverScreen()
+        this.render()
+    }
+
     clearScreen() {
         this.gameContainer.detach()
         this.gameContainer = this.blessed.box(this.gameBox)
     }
 
-    // Creating a new score box to prevent old snake segments from appearing on it
     resetScore() {
         this.scoreContainer.detach()
         this.scoreContainer = this.blessed.box(this.scoreBox)

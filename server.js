@@ -1,56 +1,81 @@
 const server = require('net').createServer();
 const { Game } = require('./src/Game');
-const { FRAME_RATE, PORT } = require("./src/constants");
-const { makeId } = require("./src/utils");
-const { gameLoop, getUpdatedVelocity, initGame } = require("./game");
+const { PORT, GAME_SPEED } = require("./src/constants");
 
-const game = null;
-const state = {};
-const clientRooms = {};
+let game = null;
+let clients = [];
 
 server.on('connection', client => {
-    startGameInterval('test1');
-    const handleKeydown = (keyCode) => {
-        const roomName = clientRooms[client.id];
-        if(!roomName){
-            return;
-        }
-        try {
-            keyCode = parseInt(keyCode);
-        }catch(err){
-            console.error(err);
-            return;
-        }
-        const vel = getUpdatedVelocity(keyCode);
-        if(vel && state[roomName]) {
-            const playerVel = state[roomName].players[client.number - 1].vel;
-            if(!(vel.x + playerVel.x == 0 && vel.y + playerVel.y == 0)){
-                state[roomName].players[client.number - 1].vel = vel;
-            }
-        }
+    const remoteAddress = `${client.remoteAddress}:${client.remotePort}`
+    console.log(`new client connection is made.`, remoteAddress);
+    if(!game){
+        game = new Game();
+        startGameInterval();
     }
-    client.on('data', handleKeydown);
+    game.join(client);
+    clients.push(client);
+    client.on('data', (data) => {
+        data = data.toString();
+        switch(data){
+            case 'enter':
+                startGameInterval(client);
+                break;
+            default:
+                game.changeDirection(data, client.remotePort);
+        }
+    });
+
+    //只會觸發一次用once
+    client.once('close', () => {
+        client.destroy();
+        game.removePlayer(client.remotePort, clients);
+        console.log("connection from %s closed", remoteAddress);
+    })
+
+    client.on('end', () => {
+        client.destroy();
+        game.removePlayer(client.remotePort, clients);
+        console.log("connection %s end", remoteAddress);
+    })
+
+    client.on('error', (err) => {
+        game.removePlayer(client.remotePort, clients);
+        client.destroy();
+        console.log("connection %s error: %s", remoteAddress, err.message);
+    })
 });
 
-const emitGameState = (roomName, state) => {
-    io.sockets.in(roomName).emit('gameState', JSON.stringify(state));
+const startGameInterval = function() {
+    if (!game.timer) {
+        game.reset();
+
+        game.timer = setInterval(function() {
+            if (game.players.length <= 0) {
+                return
+            }
+
+            game.isGameOver(clients);
+
+            for(let playerId of Object.keys(game.players)){
+                game.players[playerId].changingDirection = false;
+            }
+
+            for(let client of clients){
+                client.write(JSON.stringify({
+                    op: 'gameLoop',
+                    data: {
+                        players: game.players,
+                        dot: game.dot,
+                        score: game.score
+                    }
+                }));
+            }
+            game.moveSnake()
+        }, GAME_SPEED)
+    }
 }
 
-const emitGameOver = (roomName, winner) => {
-    io.sockets.in(roomName).emit('gameOver', JSON.stringify({ winner }));
-}
-
-const startGameInterval = (roomName) => {
-    const intervalId = setInterval(() => {
-        const winner = gameLoop(state[roomName]);
-        if(!winner) {
-            emitGameState(roomName, state[roomName]);
-        }else{
-            emitGameOver(roomName, winner);
-            state[roomName] = null;
-            clearInterval(intervalId);
-        }
-    }, 1000/FRAME_RATE);
-}
-
-server.listen(PORT);
+server.listen({
+    port: PORT, 
+    backlog: 4
+}, console.log("listening to port", PORT));

@@ -1,0 +1,16 @@
+{
+  "name": "socket_snake_cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "dependencies": {
+    "blessed": "^0.1.81"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "node server.js",
+    "start": "node server.js"
+  },
+  "author": "shih-chuan",
+  "license": "ISC"
+}
